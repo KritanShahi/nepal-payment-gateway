@@ -135,6 +135,31 @@ export const { GET, POST } = createNextCheckoutHandlers({
 | `POST /api/pay/checkout` | Create a session. Body: `{ "gateway": "esewa" \| "khalti", "orderId": "..." }` |
 | `GET /api/pay/callback/{gateway}/{orderId}` | Gateway redirect target — verification handled for you |
 
+The base (`/api/pay`) is simply where you mount the handler — change it freely. The `checkout` / `callback` segments can be renamed if they collide with routes you already have:
+
+```ts
+routes: { checkout: 'create-session', callback: 'gateway-return' }
+// → POST /api/pay/create-session, GET /api/pay/gateway-return/{gateway}/{orderId}
+```
+
+**Already have your own checkout endpoint?** Keep it — create sessions there with `createCheckout` (Level 2) and let the handler receive only the callbacks. `handler.callbackPath(gateway, orderId)` gives you the callback URL to pass as `successUrl`:
+
+```ts
+import { createCheckout, createCheckoutHandler } from 'nepal-payment-gateway';
+
+const handler = createCheckoutHandler({ /* ...config */ });
+// mount handler wherever you like, e.g. app.use('/api/pay', ...)
+
+// inside YOUR existing endpoint:
+const session = await createCheckout({
+  gateway: 'khalti',
+  amount: 150000,
+  orderId,
+  orderName: 'Premium Plan',
+  successUrl: `https://api.myshop.com/api/pay${handler.callbackPath('khalti', orderId)}`,
+});
+```
+
 ### The frontend side (~10 lines, any framework)
 
 ```js

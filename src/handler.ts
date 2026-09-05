@@ -66,11 +66,30 @@ export interface CheckoutHandlerConfig {
    * running behind a proxy that rewrites Host headers.
    */
   origin?: string;
+  /**
+   * Rename the handler's path segments, e.g. when the defaults collide with
+   * routes you already have. Single path segments only (no slashes).
+   * Defaults: { checkout: 'checkout', callback: 'callback' } — i.e.
+   * POST {base}/checkout and GET {base}/callback/{gateway}/{orderId}.
+   */
+  routes?: {
+    checkout?: string;
+    callback?: string;
+  };
 }
 
 export interface CheckoutHandler {
   /** Handles POST {base}/checkout and GET {base}/callback/{gateway}/{orderId} */
   handleRequest(request: Request): Promise<Response>;
+  /**
+   * Builds the path (relative to the mount point) of the handler's callback
+   * route for a given order — use this when you create checkout sessions
+   * yourself (e.g. from an existing endpoint via createCheckout) but still
+   * want this handler to receive and verify the gateway callbacks:
+   *
+   *   successUrl: `${origin}${mountBase}${handler.callbackPath('khalti', orderId)}`
+   */
+  callbackPath(gateway: GatewayName, orderId: string): string;
 }
 
 function base64UrlEncode(value: string): string {
@@ -115,6 +134,16 @@ export function createCheckoutHandler(config: CheckoutHandlerConfig): CheckoutHa
     throw new ValidationError('createCheckoutHandler requires successRedirect and failureRedirect');
   }
 
+  const checkoutSegment = config.routes?.checkout ?? 'checkout';
+  const callbackSegment = config.routes?.callback ?? 'callback';
+  for (const [name, segment] of [['checkout', checkoutSegment], ['callback', callbackSegment]]) {
+    if (!/^[A-Za-z0-9._~-]+$/.test(segment)) {
+      throw new ValidationError(
+        `routes.${name} must be a single URL path segment (letters, digits, . _ ~ -), got: ${JSON.stringify(segment)}`
+      );
+    }
+  }
+
   const gateways = {
     esewa: new Esewa({ isTest: config.isTest, ...config.esewa }),
     khalti: new Khalti({ isTest: config.isTest, ...config.khalti }),
@@ -144,7 +173,7 @@ export function createCheckoutHandler(config: CheckoutHandlerConfig): CheckoutHa
     });
 
     const orderIdSegment = base64UrlEncode(body.orderId);
-    const callbackUrl = `${callbackBase}/callback/${gateway}/${orderIdSegment}`;
+    const callbackUrl = `${callbackBase}/${callbackSegment}/${gateway}/${orderIdSegment}`;
 
     // Callback URLs must carry no query string: eSewa appends `?data=...`
     // itself. Success and failure share one URL; a failure redirect simply
@@ -250,13 +279,13 @@ export function createCheckoutHandler(config: CheckoutHandlerConfig): CheckoutHa
     const segments = pathname.split('/').filter(Boolean);
 
     try {
-      if (request.method === 'POST' && segments[segments.length - 1] === 'checkout') {
+      if (request.method === 'POST' && segments[segments.length - 1] === checkoutSegment) {
         const origin = config.origin ? config.origin.replace(/\/+$/, '') : requestUrl.origin;
-        const basePath = pathname.slice(0, -'/checkout'.length);
+        const basePath = pathname.slice(0, -(checkoutSegment.length + 1));
         return await handleCreateCheckout(request, `${origin}${basePath}`);
       }
 
-      const callbackIndex = segments.lastIndexOf('callback');
+      const callbackIndex = segments.lastIndexOf(callbackSegment);
       if (
         request.method === 'GET' &&
         callbackIndex !== -1 &&
@@ -273,7 +302,10 @@ export function createCheckoutHandler(config: CheckoutHandlerConfig): CheckoutHa
       return json(
         {
           error: 'Not found',
-          routes: ['POST {base}/checkout', 'GET {base}/callback/{esewa|khalti}/{orderId}'],
+          routes: [
+            `POST {base}/${checkoutSegment}`,
+            `GET {base}/${callbackSegment}/{esewa|khalti}/{orderId}`,
+          ],
         },
         404
       );
@@ -288,5 +320,9 @@ export function createCheckoutHandler(config: CheckoutHandlerConfig): CheckoutHa
     }
   }
 
-  return { handleRequest };
+  function callbackPath(gateway: GatewayName, orderId: string): string {
+    return `/${callbackSegment}/${gateway}/${base64UrlEncode(orderId)}`;
+  }
+
+  return { handleRequest, callbackPath };
 }

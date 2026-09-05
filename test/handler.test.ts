@@ -236,4 +236,69 @@ describe('createCheckoutHandler', () => {
     const response = await handler.handleRequest(new Request('https://myshop.com/api/pay/nope'));
     expect(response.status).toBe(404);
   });
+
+  describe('custom route segments', () => {
+    it('honors renamed checkout and callback segments end-to-end', async () => {
+      const fetchMock = mockFetchQueue([
+        {
+          status: 200,
+          jsonBody: { pidx: 'P1', payment_url: 'https://test-pay.khalti.com/?pidx=P1', expires_at: '', expires_in: 1800 },
+        },
+        {
+          status: 200,
+          jsonBody: { pidx: 'P1', status: 'Completed', transaction_id: 'T1', total_amount: 150000 },
+        },
+      ]);
+      const onSuccess = jest.fn();
+      const handler = createCheckoutHandler({
+        ...baseConfig,
+        onSuccess,
+        routes: { checkout: 'create-session', callback: 'gateway-return' },
+      });
+
+      // old default route must now 404
+      const old = await handler.handleRequest(
+        new Request('https://myshop.com/api/pay/checkout', {
+          method: 'POST',
+          body: JSON.stringify({ gateway: 'khalti', orderId: 'R-1' }),
+        })
+      );
+      expect(old.status).toBe(404);
+
+      // renamed checkout route works, and callback URL uses the renamed segment
+      const created = await handler.handleRequest(
+        new Request('https://myshop.com/api/pay/create-session', {
+          method: 'POST',
+          body: JSON.stringify({ gateway: 'khalti', orderId: 'R-1' }),
+        })
+      );
+      expect(created.status).toBe(200);
+      const payload = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+      expect(payload.return_url).toContain('/api/pay/gateway-return/khalti/');
+
+      // renamed callback route verifies as usual
+      const orderSeg = Buffer.from('R-1').toString('base64url');
+      const cb = await handler.handleRequest(
+        new Request(`https://myshop.com/api/pay/gateway-return/khalti/${orderSeg}?pidx=P1`)
+      );
+      expect(cb.status).toBe(303);
+      expect(onSuccess).toHaveBeenCalled();
+    });
+
+    it('rejects multi-segment route overrides', () => {
+      expect(() =>
+        createCheckoutHandler({ ...baseConfig, routes: { checkout: 'a/b' } })
+      ).toThrow(ValidationError);
+    });
+
+    it('exposes callbackPath for externally created sessions', () => {
+      const handler = createCheckoutHandler(baseConfig);
+      expect(handler.callbackPath('khalti', 'ORDER-1')).toBe(
+        `/callback/khalti/${Buffer.from('ORDER-1').toString('base64url')}`
+      );
+
+      const renamed = createCheckoutHandler({ ...baseConfig, routes: { callback: 'ipn' } });
+      expect(renamed.callbackPath('esewa', 'O2')).toMatch(/^\/ipn\/esewa\//);
+    });
+  });
 });
