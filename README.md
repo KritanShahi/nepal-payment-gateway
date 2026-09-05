@@ -239,6 +239,83 @@ What `verifyCallback` does per gateway:
 | Confirmation | transaction status API | lookup API |
 | `success: true` means | signature valid **and** status `COMPLETE` | lookup status `Completed` |
 
+### Example: NestJS
+
+NestJS runs on Express by default, so the quickest route is mounting the Level 1 handler in `main.ts` (requires the default Express adapter, not Fastify):
+
+```ts
+import { createExpressCheckoutHandler } from 'nepal-payment-gateway/express';
+
+const app = await NestFactory.create(AppModule);
+app.use('/api/pay', createExpressCheckoutHandler({ /* same config as the Quick start */ }));
+```
+
+For the idiomatic setup — payments inside Nest's DI with your own controller — use Level 2:
+
+```ts
+// payments.service.ts
+import { Injectable } from '@nestjs/common';
+import { GatewayName, NepalPaymentGateway } from 'nepal-payment-gateway';
+
+@Injectable()
+export class PaymentsService {
+  private readonly gateway = new NepalPaymentGateway({
+    isTest: true,
+    esewa: { productCode: process.env.ESEWA_PRODUCT_CODE, secretKey: process.env.ESEWA_SECRET_KEY },
+    khalti: { secretKey: process.env.KHALTI_SECRET_KEY },
+  });
+
+  createCheckout(gatewayName: GatewayName, orderId: string) {
+    // resolve the real price on your side — never from the client
+    return this.gateway.createCheckout({
+      gateway: gatewayName,
+      amount: 150000,
+      orderId,
+      orderName: 'Premium Plan',
+      successUrl: `https://api.myshop.com/payments/callback/${gatewayName}`,
+    });
+  }
+
+  verifyCallback(gatewayName: GatewayName, query: Record<string, string>) {
+    return this.gateway.verifyCallback({ gateway: gatewayName, query });
+  }
+}
+```
+
+```ts
+// payments.controller.ts
+import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
+import { GatewayName } from 'nepal-payment-gateway';
+import { PaymentsService } from './payments.service';
+
+@Controller('payments')
+export class PaymentsController {
+  constructor(private readonly payments: PaymentsService) {}
+
+  @Post('checkout')
+  create(@Body() body: { gateway: GatewayName; orderId: string }) {
+    return this.payments.createCheckout(body.gateway, body.orderId);
+  }
+
+  @Get('callback/:gateway')
+  async callback(
+    @Param('gateway') gatewayName: GatewayName,
+    @Query() query: Record<string, string>,
+    @Res() res: Response,
+  ) {
+    const result = await this.payments.verifyCallback(gatewayName, query);
+    if (result.success) {
+      // mark the order as paid (idempotent), then send the user on
+      return res.redirect(303, 'https://myshop.com/payment/success');
+    }
+    return res.redirect(303, 'https://myshop.com/payment/failed');
+  }
+}
+```
+
+The same Level 2 pattern applies to Fastify, Hono, Koa, or any other framework: one route calls `createCheckout`, the callback route calls `verifyCallback`.
+
 ---
 
 ## Level 3 — gateway-level APIs
