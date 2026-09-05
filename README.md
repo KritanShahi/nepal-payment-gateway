@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue?style=flat-square)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg?style=flat-square)](https://nodejs.org)
 
-A modern, unified Node.js SDK for **eSewa (ePay v2)** and **Khalti (ePayment v2)** — with a Stripe-Checkout-style API: create a session, redirect the user, verify the callback. Done.
+A modern, unified Node.js SDK for **eSewa (ePay v2)** and **Khalti (ePayment v2)** — one simple API: create a session, redirect the user, verify the callback. Done.
 
 ```ts
 const session = await gateway.createCheckout({
@@ -26,7 +26,7 @@ const session = await gateway.createCheckout({
 - 🛒 **Unified Checkout** — one `createCheckout()` / `verifyCallback()` API for both gateways; amounts always in paisa integers (no float bugs, no Rs-vs-paisa confusion).
 - 🔌 **Drop-in route handlers** for **Next.js** (App Router) and **Express** — the entire initiate → callback → verify → fulfil lifecycle in one config object.
 - 🔒 **Verification you can't skip** — eSewa HMAC signature checks + server-to-server status confirmation, Khalti lookup API. `success: true` means *verified paid*, never "the redirect said so".
-- ⚡ **Direct redirect URLs for eSewa** — resolves eSewa's form POST server-side into a redirect URL (like Khalti/Stripe), with automatic fallback to the documented form flow.
+- ⚡ **Direct redirect URLs for eSewa** — resolves eSewa's form POST server-side into a redirect URL (just like Khalti), with automatic fallback to the documented form flow.
 - 🐛 **Battle-tested against real gateway quirks** — comma-formatted callback amounts (`"1,000.0"`), URL-mangled base64 payloads, late-loaded env vars (dotenv-safe).
 - 📦 **Dual ESM/CJS**, 100% TypeScript, zero runtime dependencies (native `fetch` + `crypto`).
 
@@ -270,7 +270,7 @@ const lookup = await khalti.verifyPayment({ pidx: payment.pidx });
 
 ## 💰 Amounts: paisa everywhere (in the unified API)
 
-The unified `createCheckout`/`verifyCallback`/handler APIs use **integer paisa** (1 NPR = 100 paisa), like Stripe uses cents — this eliminates the two most common real-world bugs (floating-point rupees, and Khalti's paisa vs eSewa's rupees confusion). Helpers:
+The unified `createCheckout`/`verifyCallback`/handler APIs use **integer paisa** (1 NPR = 100 paisa) — working in the smallest currency unit eliminates the two most common real-world bugs (floating-point rupees, and Khalti's paisa vs eSewa's rupees confusion). Helpers:
 
 ```ts
 import { rupeesToPaisa, paisaToRupees } from 'nepal-payment-gateway';

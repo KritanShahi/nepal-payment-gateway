@@ -25,7 +25,7 @@ function sanitizeUuidPart(value: string): string {
 }
 
 /**
- * Creates a unified checkout session (Stripe-Checkout-style) on either gateway.
+ * Creates a unified checkout session on either gateway.
  *
  * Amounts are always integers in PAISA. The result always identifies the
  * session (`sessionId`) and, whenever possible, a `url` to redirect the user

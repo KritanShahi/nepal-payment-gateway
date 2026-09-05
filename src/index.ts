@@ -61,8 +61,8 @@ export class NepalPaymentGateway {
   }
 
   /**
-   * Creates a unified checkout session (Stripe-Checkout-style) on either
-   * gateway. Amounts are integers in paisa. Redirect the user to
+   * Creates a unified checkout session on either gateway.
+   * Amounts are integers in paisa. Redirect the user to
    * `session.url`, or fall back to `session.form`/`session.formHtml` (eSewa).
    */
   public createCheckout(params: CreateCheckoutParams): Promise<CheckoutSession> {

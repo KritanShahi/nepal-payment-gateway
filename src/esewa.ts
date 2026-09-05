@@ -150,7 +150,7 @@ export class Esewa {
    * Initiates an eSewa payment and additionally attempts to resolve a direct
    * checkout redirect URL by performing the form POST server-side. eSewa
    * responds to the form POST with a 302 redirect to a session checkout URL,
-   * which lets you treat eSewa like Khalti/Stripe: just redirect the user.
+   * which lets you treat eSewa like Khalti: just redirect the user.
    *
    * Falls back gracefully: when no redirect can be obtained, `redirectUrl` is
    * null and the standard formFields/formHtml flow should be used.

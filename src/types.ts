@@ -396,7 +396,7 @@ export interface EsewaPaymentUrlResult extends EsewaInitiatePaymentResult {
 }
 
 // ============================================================================
-// Unified Checkout Types (Stripe-Checkout-style abstraction)
+// Unified Checkout Types
 // ============================================================================
 
 export interface CreateCheckoutParams {
