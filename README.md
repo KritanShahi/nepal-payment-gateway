@@ -266,16 +266,40 @@ What `verifyCallback` does per gateway:
 
 ### Example: NestJS
 
-NestJS runs on Express by default, so the quickest route is mounting the Level 1 handler in `main.ts` (requires the default Express adapter, not Fastify):
+NestJS runs on Express by default, so the Level 1 drop-in handler works directly — mount it in `main.ts`. The `app.get(...)` trick bridges Nest's DI into the handler's callbacks, so your real services do the work:
 
 ```ts
+// main.ts (requires the default Express adapter, not Fastify)
+import { NestFactory } from '@nestjs/core';
 import { createExpressCheckoutHandler } from 'nepal-payment-gateway/express';
+import { AppModule } from './app.module';
+import { OrdersService } from './orders/orders.service';
 
-const app = await NestFactory.create(AppModule);
-app.use('/api/pay', createExpressCheckoutHandler({ /* same config as the Quick start */ }));
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  // pull services out of Nest's DI container and close over them
+  const orders = app.get(OrdersService);
+
+  app.use('/api/pay', createExpressCheckoutHandler({
+    esewa: { productCode: process.env.ESEWA_PRODUCT_CODE, secretKey: process.env.ESEWA_SECRET_KEY },
+    khalti: { secretKey: process.env.KHALTI_SECRET_KEY },
+    isTest: true,
+    resolveOrder: async ({ orderId }) => {
+      const order = await orders.findOne(orderId);
+      return { amount: order.amountPaisa, orderName: order.title };
+    },
+    onSuccess: async (payment) => orders.markPaid(payment.orderId, payment.transactionId),
+    successRedirect: '/payment/success',
+    failureRedirect: '/payment/failed',
+  }));
+
+  await app.listen(3000);
+}
+bootstrap();
 ```
 
-For the idiomatic setup — payments inside Nest's DI with your own controller — use Level 2:
+Trade-offs of the mount: these routes don't appear in Nest's route explorer/Swagger, and global guards/interceptors don't run on them. If you need the routes living inside Nest properly (or you use the Fastify adapter), use Level 2 with your own controller:
 
 ```ts
 // payments.service.ts
