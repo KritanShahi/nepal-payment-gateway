@@ -5,6 +5,8 @@ export default defineConfig({
     index: 'src/index.ts',
     esewa: 'src/esewa.ts',
     khalti: 'src/khalti.ts',
+    next: 'src/next.ts',
+    express: 'src/express.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

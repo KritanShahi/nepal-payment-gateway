@@ -20,8 +20,19 @@
       "types": "./dist/khalti.d.ts",
       "import": "./dist/khalti.mjs",
       "require": "./dist/khalti.cjs"
+    },
+    "./next": {
+      "types": "./dist/next.d.ts",
+      "import": "./dist/next.mjs",
+      "require": "./dist/next.cjs"
+    },
+    "./express": {
+      "types": "./dist/express.d.ts",
+      "import": "./dist/express.mjs",
+      "require": "./dist/express.cjs"
     }
   },
+  "sideEffects": false,
   "files": [
     "dist",
     "src",
@@ -49,16 +60,16 @@
     "digital-wallet",
     "nepal-gateway"
   ],
-  "author": "Antigravity",
+  "author": "Kritan",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/nepal-payment-gateway.git"
+    "url": "https://github.com/KritanShahi/nepal-payment-gateway.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/nepal-payment-gateway/issues"
+    "url": "https://github.com/KritanShahi/nepal-payment-gateway/issues"
   },
-  "homepage": "https://github.com/your-username/nepal-payment-gateway#readme",
+  "homepage": "https://github.com/KritanShahi/nepal-payment-gateway#readme",
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^22.13.1",

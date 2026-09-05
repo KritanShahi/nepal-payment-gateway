@@ -6,37 +6,44 @@ import {
   KhaltiVerifyPaymentParams,
   KhaltiVerifyPaymentResult,
 } from './types';
-import { normalizeUrl, validateRequired } from './utils';
+import { normalizeUrl, parseBooleanEnv, validateRequired } from './utils';
 
 export const KHALTI_SANDBOX_BASE_URL = 'https://dev.khalti.com/api/v2';
 export const KHALTI_PRODUCTION_BASE_URL = 'https://khalti.com/api/v2';
 
 /**
  * Khalti Payment Gateway Integration Class (ePayment v2)
+ *
+ * Credentials and mode are resolved lazily at call time, so environment
+ * variables loaded after import (e.g. via dotenv) are still picked up.
  */
 export class Khalti {
-  private secretKey?: string;
-  private isTest: boolean;
-  private baseUrl?: string;
+  private config: KhaltiConfig;
 
   constructor(config: KhaltiConfig = {}) {
-    this.isTest = config.isTest !== undefined ? config.isTest : true;
-    this.secretKey = config.secretKey || process.env.KHALTI_SECRET_KEY;
-    this.baseUrl = config.baseUrl || process.env.KHALTI_BASE_URL;
+    this.config = config;
+  }
+
+  private resolveIsTest(override?: boolean): boolean {
+    if (override !== undefined) return override;
+    if (this.config.isTest !== undefined) return this.config.isTest;
+    const fromEnv = parseBooleanEnv(process.env.KHALTI_IS_TEST);
+    return fromEnv !== undefined ? fromEnv : true;
+  }
+
+  private resolveSecretKey(override?: string): string | undefined {
+    return override || this.config.secretKey || process.env.KHALTI_SECRET_KEY;
   }
 
   /**
    * Resolves the base URL for Khalti API requests based on configuration.
    */
   private getBaseUrl(overrideBaseUrl?: string, overrideIsTest?: boolean): string {
-    if (overrideBaseUrl) {
-      return normalizeUrl(overrideBaseUrl);
+    const customUrl = overrideBaseUrl || this.config.baseUrl || process.env.KHALTI_BASE_URL;
+    if (customUrl) {
+      return normalizeUrl(customUrl);
     }
-    if (this.baseUrl) {
-      return normalizeUrl(this.baseUrl);
-    }
-    const isTest = overrideIsTest !== undefined ? overrideIsTest : this.isTest;
-    return isTest ? KHALTI_SANDBOX_BASE_URL : KHALTI_PRODUCTION_BASE_URL;
+    return this.resolveIsTest(overrideIsTest) ? KHALTI_SANDBOX_BASE_URL : KHALTI_PRODUCTION_BASE_URL;
   }
 
   /**
@@ -44,7 +51,7 @@ export class Khalti {
    * Returns checkout URL and pidx.
    */
   public async initiatePayment(params: KhaltiInitiatePaymentParams): Promise<KhaltiInitiatePaymentResult> {
-    const secretKey = params.secretKey || this.secretKey;
+    const secretKey = this.resolveSecretKey(params.secretKey);
     const baseUrl = this.getBaseUrl(params.baseUrl, params.isTest);
 
     validateRequired(
@@ -143,7 +150,7 @@ export class Khalti {
    * Calls Khalti ePayment v2 Lookup API to check transaction status.
    */
   public async verifyPayment(params: KhaltiVerifyPaymentParams): Promise<KhaltiVerifyPaymentResult> {
-    const secretKey = params.secretKey || this.secretKey;
+    const secretKey = this.resolveSecretKey(params.secretKey);
     const baseUrl = this.getBaseUrl(params.baseUrl, params.isTest);
 
     validateRequired(
@@ -216,13 +223,12 @@ export class Khalti {
   }
 }
 
-// Standalone function exports for functional usage
-const defaultKhaltiInstance = new Khalti();
-
+// Standalone function exports for functional usage.
+// A fresh instance per call keeps env-var resolution lazy (dotenv-friendly).
 export function initiatePayment(params: KhaltiInitiatePaymentParams): Promise<KhaltiInitiatePaymentResult> {
-  return defaultKhaltiInstance.initiatePayment(params);
+  return new Khalti().initiatePayment(params);
 }
 
 export function verifyPayment(params: KhaltiVerifyPaymentParams): Promise<KhaltiVerifyPaymentResult> {
-  return defaultKhaltiInstance.verifyPayment(params);
+  return new Khalti().verifyPayment(params);
 }

@@ -139,7 +139,16 @@ export interface EsewaVerifyPaymentParams {
   baseUrl?: string;
 }
 
-export type EsewaPaymentStatus = 'COMPLETE' | 'PENDING' | 'NOT_FOUND' | 'CANCELED' | 'AMBIGUOUS' | 'FAILED' | string;
+export type EsewaPaymentStatus =
+  | 'COMPLETE'
+  | 'PENDING'
+  | 'NOT_FOUND'
+  | 'CANCELED'
+  | 'AMBIGUOUS'
+  | 'FULL_REFUND'
+  | 'PARTIAL_REFUND'
+  | 'FAILED'
+  | (string & {});
 
 export interface EsewaVerifyPaymentResult {
   /**
@@ -313,7 +322,15 @@ export interface KhaltiVerifyPaymentParams {
   baseUrl?: string;
 }
 
-export type KhaltiPaymentStatus = 'Completed' | 'Pending' | 'Initiated' | 'Refunded' | 'Expired' | 'User canceled' | string;
+export type KhaltiPaymentStatus =
+  | 'Completed'
+  | 'Pending'
+  | 'Initiated'
+  | 'Refunded'
+  | 'Partially Refunded'
+  | 'Expired'
+  | 'User canceled'
+  | (string & {});
 
 export interface KhaltiVerifyPaymentResult {
   /**
@@ -362,4 +379,121 @@ export interface NepalPaymentGatewayConfig {
    * @default true
    */
   isTest?: boolean;
+}
+
+export type GatewayName = 'esewa' | 'khalti';
+
+/**
+ * Result of attempting to resolve a direct redirect URL for an eSewa payment
+ * by performing the form POST server-side.
+ */
+export interface EsewaPaymentUrlResult extends EsewaInitiatePaymentResult {
+  /**
+   * Direct eSewa checkout URL the user can be redirected to, or null when
+   * eSewa did not return a redirect (fall back to formFields/formHtml).
+   */
+  redirectUrl: string | null;
+}
+
+// ============================================================================
+// Unified Checkout Types (Stripe-Checkout-style abstraction)
+// ============================================================================
+
+export interface CreateCheckoutParams {
+  /** Which gateway to charge through */
+  gateway: GatewayName;
+  /**
+   * Total payable amount in PAISA (integer, smallest currency unit).
+   * 1 NPR = 100 paisa, e.g. 150000 = Rs 1500. Use rupeesToPaisa() to convert.
+   */
+  amount: number;
+  /** Your unique order identifier */
+  orderId: string;
+  /** Human-readable order/product name (required by Khalti) */
+  orderName: string;
+  /**
+   * URL the user lands on after a successful payment
+   * (eSewa success_url / Khalti return_url)
+   */
+  successUrl: string;
+  /**
+   * URL the user lands on after a failed/cancelled payment.
+   * Khalti uses a single return URL, so this only affects eSewa.
+   * Defaults to successUrl.
+   */
+  failureUrl?: string;
+  /** Merchant website URL (Khalti requirement). Defaults to the origin of successUrl. */
+  websiteUrl?: string;
+  /** Optional customer details (Khalti only) */
+  customer?: KhaltiCustomerInfo;
+  /**
+   * Explicit eSewa transaction UUID. Defaults to `${orderId}-${random}` so
+   * retried orders never collide. Alphanumeric and hyphens only.
+   */
+  transactionUuid?: string;
+  /**
+   * When true (default), eSewa checkout attempts a server-side form POST to
+   * obtain a direct redirect URL. Set false to skip and always use the form.
+   */
+  preferRedirectUrl?: boolean;
+}
+
+export interface CheckoutSession {
+  gateway: GatewayName;
+  /**
+   * Gateway session identifier: eSewa transaction_uuid or Khalti pidx.
+   * Store this against your order — callbacks reference it.
+   */
+  sessionId: string;
+  /** Your order identifier as passed to createCheckout */
+  orderId: string;
+  /** Amount in paisa */
+  amount: number;
+  /**
+   * URL to redirect the user's browser to. Always set for Khalti; set for
+   * eSewa when a direct redirect URL could be resolved.
+   */
+  url: string | null;
+  /**
+   * eSewa fallback: POST these fields to `action` as a top-level browser form
+   * submission. Null for Khalti.
+   */
+  form: { action: string; fields: Record<string, string> } | null;
+  /** eSewa fallback: ready-to-serve auto-submitting HTML page. Null for Khalti. */
+  formHtml: string | null;
+  /** Raw gateway response(s) for debugging */
+  raw: unknown;
+}
+
+export interface VerifyCallbackParams {
+  gateway: GatewayName;
+  /**
+   * The query parameters your callback route received, e.g. req.query or
+   * Object.fromEntries(new URL(request.url).searchParams).
+   * eSewa: expects `data` (base64). Khalti: expects `pidx`.
+   */
+  query: Record<string, string | string[] | undefined>;
+}
+
+export interface CheckoutVerificationResult {
+  gateway: GatewayName;
+  /**
+   * True only when the payment is fully verified as completed:
+   * eSewa — callback signature valid AND status API returns COMPLETE;
+   * Khalti — lookup API returns status "Completed".
+   * Only fulfil orders when this is true.
+   */
+  success: boolean;
+  /** Gateway-native status (COMPLETE / Completed / PENDING / ...) */
+  status: EsewaPaymentStatus | KhaltiPaymentStatus;
+  /** eSewa transaction_uuid or Khalti pidx */
+  sessionId: string;
+  /** Gateway-side transaction reference: eSewa ref_id / Khalti transaction_id */
+  transactionId?: string;
+  /** Verified amount in paisa, per the gateway's verification API */
+  amount?: number;
+  /** eSewa only: whether the callback HMAC signature was valid */
+  signatureValid?: boolean;
+  /** Raw decoded callback payload and verification API response */
+  raw: { callback?: unknown; verification?: unknown };
 }

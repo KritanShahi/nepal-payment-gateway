@@ -3,10 +3,19 @@ import NepalPaymentGateway, {
   Khalti,
   esewa,
   khalti,
+  createEsewaPaymentUrl,
+  decodeEsewaCallbackData,
+  generateEsewaPaymentFormHtml,
+  verifyEsewaSignature,
   initiateEsewaPayment,
   verifyEsewaPayment,
   initiateKhaltiPayment,
   verifyKhaltiPayment,
+  createCheckout,
+  createCheckoutHandler,
+  verifyCallback,
+  rupeesToPaisa,
+  paisaToRupees,
   ValidationError,
   EsewaError,
   KhaltiError,
@@ -45,13 +54,80 @@ describe('Unified NepalPaymentGateway Module', () => {
   it('should export standalone functions and sub-modules', () => {
     expect(typeof initiateEsewaPayment).toBe('function');
     expect(typeof verifyEsewaPayment).toBe('function');
+    expect(typeof createEsewaPaymentUrl).toBe('function');
+    expect(typeof verifyEsewaSignature).toBe('function');
     expect(typeof initiateKhaltiPayment).toBe('function');
     expect(typeof verifyKhaltiPayment).toBe('function');
+    expect(typeof createCheckout).toBe('function');
+    expect(typeof verifyCallback).toBe('function');
+    expect(typeof createCheckoutHandler).toBe('function');
+    expect(rupeesToPaisa(10)).toBe(1000);
+    expect(paisaToRupees(1000)).toBe(10);
 
     expect(esewa).toBeDefined();
     expect(typeof esewa.initiatePayment).toBe('function');
     expect(khalti).toBeDefined();
     expect(typeof khalti.initiatePayment).toBe('function');
+  });
+
+  it('standalone eSewa wrappers delegate correctly', () => {
+    const result = initiateEsewaPayment({
+      amount: 100,
+      transactionUuid: 'txn-index-1',
+      successUrl: 'https://example.com/s',
+      failureUrl: 'https://example.com/f',
+      productCode: 'EPAYTEST',
+      secretKey: 'secret',
+    });
+    expect(result.formFields.transaction_uuid).toBe('txn-index-1');
+    expect(generateEsewaPaymentFormHtml(result.formFields, result.paymentUrl)).toContain('esewaPaymentForm');
+
+    const payload = { hello: 'world' };
+    const encoded = Buffer.from(JSON.stringify(payload)).toString('base64');
+    expect(decodeEsewaCallbackData(encoded)).toEqual(payload);
+  });
+
+  it('gateway class exposes unified createCheckout and verifyCallback', async () => {
+    const gateway = new NepalPaymentGateway({
+      isTest: true,
+      esewa: { productCode: 'EPAYTEST', secretKey: 'secret' },
+      khalti: { secretKey: 'k' },
+    });
+
+    const originalFetch = global.fetch;
+    try {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: '',
+        headers: { get: () => null },
+        json: async () => ({ pidx: 'PX', payment_url: 'https://test-pay.khalti.com/?pidx=PX', expires_at: '', expires_in: 1 }),
+        text: async () => '',
+      }) as unknown as typeof fetch;
+
+      const session = await gateway.createCheckout({
+        gateway: 'khalti',
+        amount: 100000,
+        orderId: 'IDX-1',
+        orderName: 'Index test',
+        successUrl: 'https://example.com/cb',
+      });
+      expect(session.sessionId).toBe('PX');
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: '',
+        headers: { get: () => null },
+        json: async () => ({ pidx: 'PX', status: 'Completed', transaction_id: 'T', total_amount: 100000 }),
+        text: async () => '',
+      }) as unknown as typeof fetch;
+
+      const verification = await gateway.verifyCallback({ gateway: 'khalti', query: { pidx: 'PX' } });
+      expect(verification.success).toBe(true);
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 
   it('should export all error classes', () => {
