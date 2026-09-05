@@ -34,8 +34,8 @@ const session = await gateway.createCheckout({
 
 1. [Installation](#installation)
 2. [How a payment works](#how-a-payment-works)
-3. [Quick start](#quick-start)
-4. [Choosing an integration level](#choosing-an-integration-level)
+3. [Choosing an integration level](#choosing-an-integration-level)
+4. [Level 1 — drop-in handlers (quick start)](#level-1--drop-in-handlers-quick-start)
 5. [Level 2 — unified API, your own routes](#level-2--unified-api-your-own-routes)
 6. [Level 3 — gateway-level APIs](#level-3--gateway-level-apis)
 7. [Separate frontend and backend](#separate-frontend-and-backend)
@@ -76,9 +76,21 @@ Both gateways follow the same three steps:
 
 ---
 
-## Quick start
+## Choosing an integration level
 
-The fastest path is the drop-in handler (Level 1). One config object wires up the checkout endpoint, both gateway callbacks, verification, and your fulfilment hook.
+The package has three entry points. They are layers of the same code — Level 1 is built on Level 2, which is built on Level 3 — so you can mix them freely.
+
+| Level | Import | Use when |
+|---|---|---|
+| **1 — Drop-in handlers** | `nepal-payment-gateway/next`, `/express` | You use Next.js or Express (or NestJS on Express) and want payments working in minutes. **Start here.** |
+| **2 — Unified API** | `createCheckout`, `verifyCallback` | You want your own routes/framework (Fastify, Hono, NestJS, raw Node) but not gateway differences. |
+| **3 — Gateway APIs** | `Esewa`, `Khalti` classes | You need full control: custom flows, eSewa charge breakdowns, mobile-app backends, reconciliation jobs. |
+
+---
+
+## Level 1 — drop-in handlers (quick start)
+
+One config object wires up the checkout endpoint, both gateway callbacks, verification, and your fulfilment hook.
 
 ### Express
 
@@ -196,18 +208,6 @@ async function pay(gateway, orderId) {
 After payment the user arrives at your `successRedirect` / `failureRedirect` page with `?gateway=&orderId=&sessionId=&status=&transactionId=` appended. The order was already marked paid server-side in `onSuccess` — the page is purely presentational.
 
 > Running behind a proxy or tunnel? Set `origin: 'https://your-public-domain.com'` in the config so callback URLs point at the right host. For local development use a tunnel (e.g. `ngrok http 3000`) — gateways must be able to reach your callback URL through a browser.
-
----
-
-## Choosing an integration level
-
-The package has three entry points. They are layers of the same code — Level 1 is built on Level 2, which is built on Level 3 — so you can mix them freely.
-
-| Level | Import | Use when |
-|---|---|---|
-| **1 — Drop-in handlers** | `nepal-payment-gateway/next`, `/express` | You use Next.js or Express and want payments working in minutes. **Start here.** |
-| **2 — Unified API** | `createCheckout`, `verifyCallback` | You want your own routes/framework (Fastify, Hono, NestJS, raw Node) but not gateway differences. |
-| **3 — Gateway APIs** | `Esewa`, `Khalti` classes | You need full control: custom flows, eSewa charge breakdowns, mobile-app backends, reconciliation jobs. |
 
 ---
 
